@@ -1,7 +1,3 @@
-output "secure_bucket_id" {
-  value = aws_s3_bucket.prod_data.id
-}
-
-output "vulnerable_bucket_id" {
-  value = aws_s3_bucket.shadow_it_bucket.id
+output "evidence_bucket_name" {
+  value = aws_s3_bucket.evidence_bucket.bucket
 }

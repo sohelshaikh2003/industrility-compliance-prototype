@@ -1,43 +1,28 @@
-provider "aws" {
-  region = var.aws_region
-}
-
-resource "random_id" "bucket_suffix" {
+# -----------------------------
+# Random suffix for unique names
+# -----------------------------
+resource "random_id" "suffix" {
   byte_length = 4
 }
 
-# COMPLIANT BUCKET
-resource "aws_s3_bucket" "prod_data" {
-  bucket = "${var.project_name}-secure-data-${random_id.bucket_suffix.hex}"
+# -----------------------------
+# S3 bucket for SOC 2 evidence
+# -----------------------------
+resource "aws_s3_bucket" "evidence_bucket" {
+  bucket = "soc2-evidence-${random_id.suffix.hex}"
 
   tags = {
-    Project     = var.project_name
-    Compliance  = "SOC2"
+    Compliance = "SOC2"
+    Owner      = "AuditAutomation"
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "prod_data_access" {
-  bucket = aws_s3_bucket.prod_data.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# NON-COMPLIANT BUCKET
-resource "aws_s3_bucket" "shadow_it_bucket" {
-  bucket = "${var.project_name}-temp-logs-${random_id.bucket_suffix.hex}"
-
-  tags = {
-    Project    = var.project_name
-    Security   = "Vulnerable"
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "shadow_it_access" {
-  bucket = aws_s3_bucket.shadow_it_bucket.id
-
-  block_public_acls       = false
-  block_public_policy     = false
+# -----------------------------
+# CloudTrail (SOC 2 Logging Control)
+# -----------------------------
+resource "aws_cloudtrail" "audit_trail" {
+  name                          = "soc2-audit-trail"
+  s3_bucket_name                = aws_s3_bucket.evidence_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
 }
