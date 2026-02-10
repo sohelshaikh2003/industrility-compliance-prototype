@@ -1,9 +1,7 @@
-output "secure_bucket_id" {
-  description = "The name of our compliant S3 bucket"
-  value       = aws_s3_bucket.prod_data.id
+output "config_rule_name" {
+  value = aws_config_config_rule.s3_public_read.name
 }
 
-output "vulnerable_bucket_id" {
-  description = "The name of our non-compliant S3 bucket"
-  value       = aws_s3_bucket.shadow_it_bucket.id
+output "compliant_bucket" {
+  value = aws_s3_bucket.compliant_storage.id
 }

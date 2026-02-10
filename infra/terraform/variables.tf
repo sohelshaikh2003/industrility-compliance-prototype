@@ -1,12 +1,14 @@
-# The region where all resources will live. 
-# Defaulting to Mumbai as discussed for the prototype.
 variable "aws_region" {
   type    = string
-  default = "ap-south-1"
+  default = "us-east-1"
 }
 
-# Used for tagging resources so we can find them in the billing console.
-variable "project_name" {
+variable "compliant_bucket_name" {
   type    = string
-  default = "industrility-soc2-demo"
+  default = "sohel-soc2-private-data"
+}
+
+variable "non_compliant_bucket_name" {
+  type    = string
+  default = "sohel-soc2-public-leak"
 }
