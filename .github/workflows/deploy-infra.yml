@@ -4,21 +4,16 @@ on:
     branches: [ main ]
 
 jobs:
-  terraform-deploy:
+  terraform:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform CLI
-        uses: hashicorp/setup-terraform@v3
-
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init and Apply
         env:
-          # GitHub Secrets fetch keys
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: "ap-south-1" 
+          AWS_REGION: "ap-south-1"
         run: |
           cd infra/terraform
           terraform init
