@@ -1,14 +1,11 @@
 variable "aws_region" {
-  type    = string
-  default = "us-east-1"
+  description = "Region for SOC 2 prototype"
+  type        = string
+  default     = "ap-south-1"
 }
 
-variable "compliant_bucket_name" {
-  type    = string
-  default = "sohel-soc2-private-data"
-}
-
-variable "non_compliant_bucket_name" {
-  type    = string
-  default = "sohel-soc2-public-leak"
+variable "project_name" {
+  description = "Tag for resource identification"
+  type        = string
+  default     = "industrility"
 }

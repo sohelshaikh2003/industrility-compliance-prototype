@@ -1,54 +1,43 @@
-# 1. Compliant Bucket
-resource "aws_s3_bucket" "compliant_storage" {
-  bucket = var.compliant_bucket_name
+provider "aws" {
+  region = var.aws_region
 }
 
-resource "aws_s3_bucket_public_access_block" "compliant_block" {
-  bucket = aws_s3_bucket.compliant_storage.id
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+# COMPLIANT BUCKET
+resource "aws_s3_bucket" "prod_data" {
+  bucket = "${var.project_name}-secure-data-${random_id.bucket_suffix.hex}"
+
+  tags = {
+    Project     = var.project_name
+    Compliance  = "SOC2"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "prod_data_access" {
+  bucket = aws_s3_bucket.prod_data.id
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-# 2. Non-Compliant Bucket (No public block)
-resource "aws_s3_bucket" "leaked_storage" {
-  bucket = var.non_compliant_bucket_name
-}
+# NON-COMPLIANT BUCKET
+resource "aws_s3_bucket" "shadow_it_bucket" {
+  bucket = "${var.project_name}-temp-logs-${random_id.bucket_suffix.hex}"
 
-# 3. AWS Config Setup
-resource "aws_iam_role" "config_role" {
-  name = "sohel-aws-config-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = { Service = "config.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "config_policy" {
-  role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-}
-
-resource "aws_config_configuration_recorder" "main" {
-  name     = "soc2-recorder"
-  role_arn = aws_iam_role.config_role.arn
-}
-
-resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
-  is_enabled = true
-}
-
-resource "aws_config_config_rule" "s3_public_read" {
-  name = "s3-bucket-public-read-prohibited"
-  source {
-    owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+  tags = {
+    Project    = var.project_name
+    Security   = "Vulnerable"
   }
-  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_s3_bucket_public_access_block" "shadow_it_access" {
+  bucket = aws_s3_bucket.shadow_it_bucket.id
+
+  block_public_acls       = false
+  block_public_policy     = false
 }
