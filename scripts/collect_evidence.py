@@ -1,36 +1,44 @@
-import boto3
 import json
-import os
+import boto3
 from datetime import datetime
 
-def run_s3_audit():
-    print("--- Starting SOC 2 Audit ---")
-    s3 = boto3.client('s3', region_name="ap-south-1")
-    all_buckets = s3.list_buckets()['Buckets']
-    audit_results = []
-    
-    for bucket in all_buckets:
-        name = bucket['Name']
-        if "industrility" in name:
-            try:
-                response = s3.get_public_access_block(Bucket=name)
-                config = response['PublicAccessBlockConfiguration']
-                is_secure = all([config['BlockPublicAcls'], config['BlockPublicPolicy']])
-                status = "PASS" if is_secure else "FAIL"
-            except:
-                status = "FAIL"
-            
-            audit_results.append({
-                "timestamp": datetime.now().isoformat(),
-                "resource": name,
-                "control": "SOC2-CC6.1",
-                "result": status
-            })
+# AWS clients
+ec2 = boto3.client("ec2")
+cloudtrail = boto3.client("cloudtrail")
 
-    os.makedirs('evidence', exist_ok=True)
-    with open('evidence/compliance_report.json', 'w') as f:
-        json.dump(audit_results, f, indent=4)
-    print("Audit finished. Evidence saved.")
+# Evidence object (audit artifact)
+evidence = {
+    "timestamp": datetime.utcnow().isoformat(),
+    "controls": {}
+}
 
-if __name__ == "__main__":
-    run_s3_audit()
+# ==============================
+# SOC 2 CONTROL: Logging Enabled
+# ==============================
+
+trails_response = cloudtrail.describe_trails()
+trails = trails_response.get("trailList", [])
+
+# Store evidence
+evidence["controls"]["cloudtrail_enabled"] = len(trails) > 0
+
+# 🚨 CONTROL ENFORCEMENT (THIS IS THE IMPORTANT PART)
+# If CloudTrail is missing → FAIL THE COMPLIANCE CHECK
+if len(trails) == 0:
+    raise Exception("SOC2 FAIL: CloudTrail logging not enabled")
+
+# ==============================
+# SOC 2 CONTROL: Region Visibility
+# ==============================
+
+regions = ec2.describe_regions()["Regions"]
+evidence["controls"]["region_count"] = len(regions)
+
+# ==============================
+# Save Evidence File
+# ==============================
+
+with open("evidence/soc2_evidence.json", "w") as f:
+    json.dump(evidence, f, indent=2)
+
+print("✅ SOC 2 evidence collected successfully")
