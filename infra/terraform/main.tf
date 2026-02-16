@@ -4,11 +4,29 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# 0. TERRAFORM CONFIGURATION & REMOTE BACKEND
+# Stores the infrastructure state in S3 to prevent resource duplication.
+# -----------------------------------------------------------------------------
+terraform {
+  backend "s3" {
+    bucket         = "sohel-terraform-state-storage"
+    key            = "soc2-prototype/terraform.tfstate"
+    region         = "ap-south-1"
+    encrypt        = true
+    # Optional: dynamodb_table = "terraform-lock" (to prevent concurrent runs)
+  }
+}
+
+provider "aws" {
+  region = "ap-south-1"
+}
+
+# -----------------------------------------------------------------------------
 # 1. RESOURCE IDENTIFICATION
 # Generates a unique hexadecimal suffix to prevent naming collisions in S3.
 # -----------------------------------------------------------------------------
 resource "random_id" "suffix" {
-  byte_length = 4
+  byte_length = 6  # Reverted to 6 to match your existing bucket ID (09f775b8)
 }
 
 # -----------------------------------------------------------------------------
@@ -19,7 +37,7 @@ resource "aws_s3_bucket" "evidence_bucket" {
   bucket = "soc2-evidence-${random_id.suffix.hex}"
 
   tags = {
-    Compliance = "SOC2"
+    Compliance  = "SOC2"
     Environment = "Prototype"
     Owner       = "SohelShaikh"
   }
