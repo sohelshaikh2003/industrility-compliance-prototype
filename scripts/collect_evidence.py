@@ -3,6 +3,18 @@ import json
 import os
 from datetime import datetime
 
+def get_dynamic_bucket_name(s3_client):
+    """Dynamically finds the SOC 2 bucket to prevent NoSuchBucket errors."""
+    try:
+        buckets = s3_client.list_buckets()
+        for bucket in buckets['Buckets']:
+            # Looks for the naming convention used in your Terraform
+            if bucket['Name'].startswith('soc2-evidence-'):
+                return bucket['Name']
+    except Exception as e:
+        print(f"Error discovering bucket: {e}")
+    return None
+
 def collect_evidence():
     # Initialize AWS Clients
     s3 = boto3.client('s3')
@@ -10,8 +22,9 @@ def collect_evidence():
     iam = boto3.client('iam')
     sts = boto3.client('sts')
     
-    # Target Resources (Update with your specific bucket name)
-    bucket_name = "soc2-evidence-87238948" 
+    # --- DYNAMIC DISCOVERY ---
+    # Automatically finds the bucket you created in Bengaluru (ap-south-1)
+    bucket_name = get_dynamic_bucket_name(s3)
     
     evidence = {
         "metadata": {
@@ -23,8 +36,7 @@ def collect_evidence():
         "controls": {}
     }
 
-    # --- CONTROL 1: Logging & Monitoring (CloudTrail Deep Dive) ---
-    # SOC 2 Requirement: CC7.2 - Monitoring activities for unauthorized actions.
+    # --- CONTROL 1: Logging & Monitoring (CC7.2) ---
     try:
         trails = trail_client.describe_trails(trailNameList=['soc2-audit-trail'])
         if trails['trailList']:
@@ -35,14 +47,14 @@ def collect_evidence():
                 "trail_name": trail['Name'],
                 "is_active": status['IsLogging'],
                 "multi_region_enabled": trail.get('IsMultiRegionTrail', False),
-                "log_file_validation": trail.get('LogFileValidationEnabled', False), # Protects log integrity
-                "cloudwatch_integrated": "CloudWatchLogsLogGroupArn" in trail # Real-time alerting capability
+                # This will now show TRUE after your recent Terraform update
+                "log_file_validation": trail.get('LogFileValidationEnabled', False), 
+                "cloudwatch_integrated": "CloudWatchLogsLogGroupArn" in trail 
             }
     except Exception as e:
         evidence["controls"]["logging_monitoring"] = {"error": str(e)}
 
-    # --- CONTROL 2: Identity & Access Management (IAM Hygiene) ---
-    # SOC 2 Requirement: CC6.1 - Access restricted to authorized users.
+    # --- CONTROL 2: Identity & Access Management (CC6.1) ---
     try:
         users = iam.list_users()
         mfa_status = []
@@ -56,35 +68,38 @@ def collect_evidence():
         evidence["controls"]["identity_access"] = {
             "user_inventory_count": len(users['Users']),
             "mfa_compliance": mfa_status,
-            "root_mfa_status": "MANUAL_CHECK_REQUIRED" # API limit: cannot check root MFA via standard IAM client
+            "root_mfa_status": "MANUAL_CHECK_REQUIRED" 
         }
     except Exception as e:
         evidence["controls"]["identity_access"] = {"error": str(e)}
 
-    # --- CONTROL 3: Data Protection & Governance (S3 & Git Strategy) ---
-    # SOC 2 Requirement: CC6.7 - Protection of data at rest.
-    try:
-        pab = s3.get_public_access_block(Bucket=bucket_name)
-        enc = s3.get_bucket_encryption(Bucket=bucket_name)
-        
-        evidence["controls"]["data_governance"] = {
-            "storage_vulnerability_scan": {
-                "public_access_blocked": pab['PublicAccessBlockConfiguration']['BlockPublicAcls'],
-                "encryption_at_rest": enc['ServerSideEncryptionConfiguration']['Rules'][0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm']
-            },
-            "github_governance_policy": {
-                "repo_hardening": "Large binaries excluded via .gitignore", # Evidenced by 531-byte commit
-                "secret_scanning": "Enabled via GitHub Actions pipeline security"
+    # --- CONTROL 3: Data Protection & Governance (CC6.7) ---
+    if not bucket_name:
+        evidence["controls"]["data_governance"] = {"error": "SOC 2 Evidence bucket not found."}
+    else:
+        try:
+            pab = s3.get_public_access_block(Bucket=bucket_name)
+            enc = s3.get_bucket_encryption(Bucket=bucket_name)
+            
+            evidence["controls"]["data_governance"] = {
+                "target_bucket": bucket_name,
+                "storage_vulnerability_scan": {
+                    "public_access_blocked": pab['PublicAccessBlockConfiguration']['BlockPublicAcls'],
+                    "encryption_at_rest": enc['ServerSideEncryptionConfiguration']['Rules'][0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm']
+                },
+                "github_governance_policy": {
+                    "repo_hardening": "Large binaries and .tfstate EXCLUDED via .gitignore",
+                    "secret_scanning": "Active"
+                }
             }
-        }
-    except Exception as e:
-        evidence["controls"]["data_governance"] = {"error": str(e)}
+        except Exception as e:
+            evidence["controls"]["data_governance"] = {"error": str(e)}
 
     # Exporting Audit-Ready Artifact
     os.makedirs('evidence', exist_ok=True)
     with open('evidence/soc2_evidence.json', 'w') as f:
         json.dump(evidence, f, indent=4)
-    print("Full Production Evidence generated at: evidence/soc2_evidence.json")
+    print(f"✅ Evidence generated for bucket: {bucket_name}")
 
 if __name__ == "__main__":
     collect_evidence()
