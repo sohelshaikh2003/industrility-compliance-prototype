@@ -25,8 +25,8 @@ provider "aws" {
 # 1. RESOURCE IDENTIFICATION
 # Generates a unique hexadecimal suffix to prevent naming collisions in S3.
 # -----------------------------------------------------------------------------
-resource "random_id" "suffix" {
-  byte_length = 6  # Reverted to 6 to match your existing bucket ID (09f775b8)
+resource "aws_s3_bucket" "evidence_bucket" {
+  bucket = "soc2-evidence-09f775b8" # Remove the ${random_id.suffix.hex}
 }
 
 # -----------------------------------------------------------------------------
