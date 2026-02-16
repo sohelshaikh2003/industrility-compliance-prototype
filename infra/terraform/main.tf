@@ -1,11 +1,10 @@
 # =============================================================================
 # SOC 2 COMPLIANCE INFRASTRUCTURE PROTOTYPE
-# Purpose: Automated Evidence Collection for CC7.2 (Monitoring) and CC6.7 (Data Protection)
+# Purpose: Automated Evidence Collection for CC7.2 and CC6.7
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # 0. TERRAFORM CONFIGURATION & REMOTE BACKEND
-# Stores the infrastructure state in S3 to prevent resource duplication.
 # -----------------------------------------------------------------------------
 terraform {
   backend "s3" {
@@ -13,7 +12,6 @@ terraform {
     key            = "soc2-prototype/terraform.tfstate"
     region         = "ap-south-1"
     encrypt        = true
-    # Optional: dynamodb_table = "terraform-lock" (to prevent concurrent runs)
   }
 }
 
@@ -22,19 +20,11 @@ provider "aws" {
 }
 
 # -----------------------------------------------------------------------------
-# 1. RESOURCE IDENTIFICATION
-# Generates a unique hexadecimal suffix to prevent naming collisions in S3.
+# 1. EVIDENCE STORAGE (S3)
+# Hardcoded to your existing bucket to prevent "Destroy/Replace" actions.
 # -----------------------------------------------------------------------------
 resource "aws_s3_bucket" "evidence_bucket" {
-  bucket = "soc2-evidence-09f775b8" # Remove the ${random_id.suffix.hex}
-}
-
-# -----------------------------------------------------------------------------
-# 2. EVIDENCE STORAGE (S3)
-# Primary repository for audit logs and compliance artifacts.
-# -----------------------------------------------------------------------------
-resource "aws_s3_bucket" "evidence_bucket" {
-  bucket = "soc2-evidence-${random_id.suffix.hex}"
+  bucket = "soc2-evidence-09f775b8"
 
   tags = {
     Compliance  = "SOC2"
@@ -54,7 +44,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "evidence_encrypti
   }
 }
 
-# PUBLIC ACCESS BLOCK: Prevents accidental data exposure (Logical Access Control).
+# PUBLIC ACCESS BLOCK: Prevents accidental data exposure.
 resource "aws_s3_bucket_public_access_block" "evidence_pab" {
   bucket = aws_s3_bucket.evidence_bucket.id
 
@@ -65,8 +55,7 @@ resource "aws_s3_bucket_public_access_block" "evidence_pab" {
 }
 
 # -----------------------------------------------------------------------------
-# 3. ACCESS POLICIES
-# Grants AWS CloudTrail permission to write audit logs to the S3 bucket.
+# 2. ACCESS POLICIES
 # -----------------------------------------------------------------------------
 resource "aws_s3_bucket_policy" "cloudtrail_policy" {
   bucket = aws_s3_bucket.evidence_bucket.id
@@ -96,15 +85,13 @@ resource "aws_s3_bucket_policy" "cloudtrail_policy" {
 }
 
 # -----------------------------------------------------------------------------
-# 4. REAL-TIME MONITORING (CLOUDWATCH)
-# Enables immediate visibility into account activity via log streaming.
+# 3. MONITORING & LOGGING (CLOUDWATCH + CLOUDTRAIL)
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "audit_logs" {
   name              = "/aws/cloudtrail/soc2-audit-trail"
-  retention_in_days = 90 # Retention policy aligned with audit cycles
+  retention_in_days = 90
 }
 
-# IAM ROLE: Allows CloudTrail to assume a role to deliver logs to CloudWatch.
 resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
   name = "CloudTrailToCloudWatchRole"
 
@@ -118,7 +105,6 @@ resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
   })
 }
 
-# IAM POLICY: Specifically grants the ability to stream events and create log streams.
 resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
   name = "CloudTrailToCloudWatchPolicy"
   role = aws_iam_role.cloudtrail_to_cloudwatch.id
@@ -133,20 +119,13 @@ resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
   })
 }
 
-# -----------------------------------------------------------------------------
-# 5. AUDIT TRAIL (CLOUDTRAIL)
-# The "Source of Truth" for all account activity.
-# -----------------------------------------------------------------------------
 resource "aws_cloudtrail" "audit_trail" {
   name                          = "soc2-audit-trail"
   s3_bucket_name                = aws_s3_bucket.evidence_bucket.id
   include_global_service_events = true
   is_multi_region_trail         = true
-  
-  # LOG FILE VALIDATION: Essential for non-repudiation (proof logs haven't been edited).
   enable_log_file_validation    = true 
 
-  # INTEGRATION: Connects the trail to CloudWatch for active alerting.
   cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.audit_logs.arn}:*" 
   cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_to_cloudwatch.arn
 
