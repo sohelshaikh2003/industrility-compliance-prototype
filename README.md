@@ -1,3 +1,4 @@
+# Automated Evidence Collection Security Governance Engine
 # SOC 2 Automated Compliance Prototype
 
 This repository demonstrates a lightweight, automated compliance engine designed to monitor AWS infrastructure against **SOC 2 Trust Services Criteria** (specifically CC6.1 - Access Choice and Control). 
